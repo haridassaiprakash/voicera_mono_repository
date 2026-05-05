@@ -4,9 +4,10 @@ import os
 import socket
 import json
 import traceback
+import asyncio
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from loguru import logger
 from dotenv import load_dotenv
@@ -17,11 +18,14 @@ from pydantic import BaseModel
 import requests
 
 from .bot import bot, ubona_bot
+from .telemetry import router as telemetry_router
 from .backend_utils import (
     create_meeting_in_backend,
     update_meeting_end_time,
     fetch_agent_config_from_backend,
+    fetch_integration_key,
 )
+from .batching import create_batch_router
 
 
 load_dotenv()
@@ -81,12 +85,15 @@ def _get_env_or_raise(key: str) -> str:
     return value
 
 
-def make_outbound_call_vobiz(
+async def make_outbound_call_vobiz(
     customer_number: str,
     agent_id: str,
     caller_id: Optional[str] = None,
 ) -> dict:
     """Make an outbound call using Vobiz API.
+
+    Vobiz Auth ID and Auth Token are loaded from the backend Integrations collection
+    for the agent's organization (models VobizAuthId and VobizAuthToken), not from .env.
 
     Args:
         customer_number: Phone number to call
@@ -100,8 +107,20 @@ def make_outbound_call_vobiz(
         ValueError: If required credentials are missing
         requests.HTTPError: If API call fails
     """
-    auth_id = _get_env_or_raise("VOBIZ_AUTH_ID")
-    auth_token = _get_env_or_raise("VOBIZ_AUTH_TOKEN")
+    agent_config = await fetch_agent_config_from_backend(agent_id)
+    if not agent_config:
+        raise ValueError(f"Could not load agent config for agent_id={agent_id}")
+    org_id = agent_config.get("org_id")
+    if not org_id:
+        raise ValueError("Agent has no org_id; cannot resolve Vobiz credentials from Integrations")
+
+    auth_id = fetch_integration_key(org_id, "VobizAuthId")
+    auth_token = fetch_integration_key(org_id, "VobizAuthToken")
+    if not auth_id or not auth_token:
+        raise ValueError(
+            "Vobiz Auth ID and Auth Token must be configured in Integrations (Telephony) for this organization."
+        )
+
     server_url = _get_env_or_raise("JOHNAIC_SERVER_URL")
     vobiz_api_base_url = _get_env_or_raise("VOBIZ_API_BASE")
 
@@ -114,23 +133,14 @@ def make_outbound_call_vobiz(
         "X-Auth-Token": auth_token,
         "Content-Type": "application/json",
     }
-    answer_url = f"{server_url}/answer?agent_id={agent_id}"
     payload = {
         "from": from_number,
         "to": customer_number,
-        "answer_url": answer_url,
+        "answer_url": f"{server_url}/answer?agent_id={agent_id}",
         "answer_method": "POST",
     }
 
-    ws_url = os.environ.get("JOHNAIC_WEBSOCKET_URL", "<not set>")
-    logger.info(
-        "📞 Outbound call: {} → {} agent={} | answer_url={} | websocket_base={}",
-        from_number,
-        customer_number,
-        agent_id,
-        answer_url,
-        ws_url,
-    )
+    logger.info(f"📞 Outbound call: {from_number} → {customer_number} (agent: {agent_id})")
     
     vobiz_api_url = f"{vobiz_api_base_url}/Account/{auth_id}/Call/"
     response = requests.post(vobiz_api_url, json=payload, headers=headers, timeout=30)
@@ -177,20 +187,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-@app.on_event("startup")
-async def _log_voice_urls_at_startup():
-    """Log URLs at startup so we can verify they are set and public."""
-    server_url = os.environ.get("JOHNAIC_SERVER_URL", "")
-    ws_url = os.environ.get("JOHNAIC_WEBSOCKET_URL", "")
-    logger.info(
-        "📞 Voice server startup: JOHNAIC_SERVER_URL={} JOHNAIC_WEBSOCKET_URL={} (Vobiz must reach these)",
-        server_url or "<not set>",
-        ws_url or "<not set>",
-    )
-    if not ws_url:
-        logger.warning("📞 JOHNAIC_WEBSOCKET_URL not set - WebSocket for call audio will not work")
+app.include_router(telemetry_router)
+app.include_router(create_batch_router(make_outbound_call_vobiz))
 
 
 # === Routes ===
@@ -218,7 +216,7 @@ async def make_outbound_call(request: OutboundCallRequest):
         Call initiation result
     """
     try:
-        result = make_outbound_call_vobiz(
+        result = await make_outbound_call_vobiz(
             request.customer_number,
             request.agent_id,
             request.caller_id,
@@ -287,37 +285,19 @@ async def vobiz_answer_webhook(request: Request):
     event = form_data_dict.get("Event", "unknown")
     hangup_cause = form_data_dict.get("HangupCause", "USER_BUSY")
 
-    logger.info(
-        "📞 Answer webhook: method={} agent_id={} Event={} HangupCause={} form_keys={}",
-        request.method,
-        agent_id,
-        event,
-        hangup_cause,
-        list(form_data_dict.keys()),
-    )
-
     if event == "StartApp":
         await log_meeting(agent_id, form_data_dict)
         websocket_prefix = os.environ.get("JOHNAIC_WEBSOCKET_URL", "")
         websocket_url = f"{websocket_prefix}/agent/{agent_id}"
-        xml_body = _build_stream_xml(websocket_url)
-        logger.info(
-            "📞 Answer webhook: returning Stream XML | websocket_url={} | Vobiz should connect here for audio",
-            websocket_url,
-        )
-        logger.info(
-            "📞 Answer webhook: XML length={} (contentType=audio/x-mulaw;rate=8000 or L16)",
-            len(xml_body),
-        )
         return Response(
-            content=xml_body,
+            content=_build_stream_xml(websocket_url),
             media_type="application/xml",
         )
     elif event == "Hangup" and hangup_cause == "USER_BUSY":
-        logger.info("📞 Answer webhook: Hangup USER_BUSY - user hung up")
+        logger.info("User hung up the call")
         await log_meeting(agent_id, form_data_dict)
     else:
-        logger.info("📞 Answer webhook: Event={} - no Stream XML returned", event)
+        logger.info("Hang URL Event Sent")
 
 
 @app.websocket("/agent/{agent_id}")
@@ -328,16 +308,8 @@ async def websocket_endpoint(websocket: WebSocket, agent_id: str):
         websocket: WebSocket connection
         agent_id: Agent ID to use
     """
-    # Log immediately when connection attempt is received (before accept)
-    logger.info(
-        "🔌 WebSocket CONNECTION ATTEMPT: /agent/{} - if you see this, Vobiz connected to this pod",
-        agent_id,
-    )
     await websocket.accept()
-    logger.info(
-        "🔌 WebSocket ACCEPTED: agent_id={} - call audio stream started, next: wait for 'start' message",
-        agent_id,
-    )
+    logger.info(f"🔌 WebSocket connected: agent={agent_id}")
 
     call_sid = None
     stream_sid = None
@@ -352,22 +324,12 @@ async def websocket_endpoint(websocket: WebSocket, agent_id: str):
             logger.error(f"❌ Failed to fetch agent config from backend: {agent_id}")
             return
 
-        # Wait for start event with call metadata (Vobiz may send "connected" first)
+        # Wait for start event with call metadata
         first_message = await websocket.receive_text()
         data = json.loads(first_message)
-        logger.info(f"📨 First WebSocket message: {first_message}")
-        first_event = data.get("event", "<no event key>")
-        logger.info(f"📨 First WebSocket message: event={first_event}, keys={list(data.keys())}")
 
-        if first_event == "connected":
-            logger.info("📨 Skipping 'connected' event, waiting for 'start'")
-            first_message = await websocket.receive_text()
-            data = json.loads(first_message)
-            first_event = data.get("event", "<no event key>")
-            logger.info(f"📨 Second WebSocket message: event={first_event}, keys={list(data.keys())}")
-
-        if first_event != "start":
-            logger.warning(f"⚠️ Expected 'start' event, got: {first_event}. Full message keys: {list(data.keys())}")
+        if data.get("event") != "start":
+            logger.warning(f"⚠️ Expected 'start' event, got: {data.get('event')}")
             return
 
         start_info = data.get("start", {})
@@ -387,6 +349,64 @@ async def websocket_endpoint(websocket: WebSocket, agent_id: str):
         logger.debug(traceback.format_exc())
     finally:
         logger.info(f"🔌 WebSocket closed: call_sid={call_sid}")
+
+
+@app.websocket("/browser/agent/{agent_id}")
+async def browser_websocket_endpoint(websocket: WebSocket, agent_id: str):
+    """WebSocket endpoint for browser testing with live transcript events."""
+    await websocket.accept()
+    logger.info(f"🔌 Browser WebSocket connected: agent={agent_id}")
+
+    call_sid = None
+    stream_sid = None
+
+    try:
+        agent_config = await fetch_agent_config_from_backend(agent_id)
+        agent_type = agent_config.get("agent_type")
+
+        if not agent_config:
+            logger.error(f"❌ Failed to fetch agent config from backend: {agent_id}")
+            return
+
+        first_message = await websocket.receive_text()
+        data = json.loads(first_message)
+        if data.get("event") != "start":
+            logger.warning(f"⚠️ Expected 'start' event, got: {data.get('event')}")
+            return
+
+        start_info = data.get("start", {})
+        call_sid = start_info.get("callSid") or start_info.get("callId", "unknown")
+        stream_sid = start_info.get("streamSid") or start_info.get("streamId", "unknown")
+
+        async def send_transcript(role: str, content: str, timestamp: Optional[str]):
+            await websocket.send_text(
+                json.dumps(
+                    {
+                        "event": "transcript",
+                        "role": role,
+                        "content": content,
+                        "timestamp": timestamp,
+                    }
+                )
+            )
+
+        await bot(
+            websocket,
+            stream_sid,
+            call_sid,
+            agent_type,
+            agent_config,
+            transcript_callback=send_transcript,
+        )
+
+    except FileNotFoundError as e:
+        logger.error(f"❌ {e}")
+        await websocket.close(code=1008, reason="Agent config not found")
+    except Exception as e:
+        logger.error(f"❌ Browser WebSocket error: {e}")
+        logger.debug(traceback.format_exc())
+    finally:
+        logger.info(f"🔌 Browser WebSocket closed: call_sid={call_sid}")
 
 # Ubona: hardcoded to Mahavistaar agent; answer URL is https://vobiz.johnaic.com/ubona
 UBONA_AGENT_TYPE = "Mahavistaar"

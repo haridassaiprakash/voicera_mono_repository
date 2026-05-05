@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NavigationProgress } from "@/components/navigation-progress";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -16,7 +17,7 @@ export const metadata: Metadata = {
   title: "VoiceEra - AI Voice Assistants",
   description: "Build and manage your AI voice assistants",
   icons: {
-    icon: "/ekstep.svg",
+    icon: "/voicera-logo-black-source.png",
   },
 };
 
@@ -30,6 +31,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <NavigationProgress />
         {children}
       </body>
     </html>

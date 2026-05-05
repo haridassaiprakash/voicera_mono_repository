@@ -4,16 +4,17 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
-  Bot,
+  UserRound,
   Hash,
-  Users,
-  Megaphone,
   ChevronsUpDown,
   LogOut,
-  History,
-  BarChart3,
-  Contact,
-  Plug,
+  Clock,
+  TrendingUp,
+  Settings,
+  Cpu,
+  BookOpen,
+  LogIn,
+  Layers,
 } from "lucide-react"
 
 import {
@@ -35,7 +36,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { getCurrentUser, clearAuth, type User } from "@/lib/api"
 
 // Menu items for main navigation
@@ -43,12 +43,7 @@ const mainNavItems = [
   {
     title: "Agents",
     url: "/assistants",
-    icon: Bot,
-  },
-  {
-    title: "Campaigns",
-    url: "/campaigns",
-    icon: Megaphone,
+    icon: UserRound,
   },
   {
     title: "Numbers",
@@ -56,19 +51,29 @@ const mainNavItems = [
     icon: Hash,
   },
   {
-    title: "Audiences",
-    url: "/audiences",
-    icon: Users,
+    title: "Knowledge Base",
+    url: "/knowledge-base",
+    icon: BookOpen,
+  },
+  {
+    title: "Batches",
+    url: "/batches",
+    icon: Layers,
   },
   {
     title: "History",
     url: "/history",
-    icon: History,
+    icon: Clock,
   },
   {
     title: "Analytics",
     url: "/analytics",
-    icon: BarChart3,
+    icon: TrendingUp,
+  },
+  {
+    title: "Telemetry",
+    url: "/telemetry",
+    icon: LogIn,
   },
 ]
 
@@ -77,12 +82,12 @@ const settingsNavItems = [
   {
     title: "Members",
     url: "/members",
-    icon: Contact,
+    icon: Settings,
   },
   {
     title: "Integrations",
     url: "/integrations",
-    icon: Plug,
+    icon: Cpu,
   },
 ]
 
@@ -114,33 +119,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     router.push("/")
   }
 
-  // Get initials from name
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2)
-  }
-
   return (
-    <Sidebar collapsible="none" {...props}>
+    <Sidebar collapsible="none" className="bg-[#F1EFE8]" {...props}>
       {/* Header - Logo area with proper padding */}
-      <SidebarHeader className="px-4 py-4">
-        <div className="flex items-center">
+      <SidebarHeader className="bg-[#F1EFE8] px-4 py-4">
+        <div className="flex w-full items-center border-b border-[#d6d3cc] pb-2">
           <img
-            src="/ekstep.svg"
-            alt="Framewise Logo"
-            className="h-8 w-auto max-w-full flex-shrink-0"
+            src="/voicera-logo-black-source.png"
+            alt="VoiceRA Logo"
+            className="h-20 w-auto max-w-[320px] flex-shrink-0"
+            style={{ filter: "brightness(0) saturate(100%)" }}
           />
         </div>
       </SidebarHeader>
 
       {/* Main Navigation - Primary actions */}
-      <SidebarContent className="px-3">
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 mb-2">
+      <SidebarContent className="flex flex-1 flex-col bg-[#F1EFE8] px-3 pt-4">
+        <SidebarGroup className="mt-0 pt-0">
+          <SidebarGroupLabel className="mb-2 px-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[#8A8882]">
             Navigation
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -155,8 +151,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       tooltip={item.title}
                       className={
                         isActive
-                          ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
-                          : ""
+                          ? "w-full rounded-md bg-white font-semibold text-slate-900 hover:bg-white hover:text-slate-900"
+                          : "w-full rounded-md text-slate-700 hover:bg-white/70 hover:text-slate-900"
                       }
                     >
                       <Link href={item.url}>
@@ -170,13 +166,9 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-      </SidebarContent>
 
-      {/* Footer - Settings + User profile */}
-      <SidebarFooter className="px-3 py-3 mt-auto">
-        {/* Settings Navigation */}
-        <div className="mb-3">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-2 mb-2">
+        <div className="mt-auto pb-2">
+          <p className="mb-2 px-2 text-[10px] font-medium uppercase tracking-[0.08em] text-[#8A8882]">
             Settings
           </p>
           <SidebarMenu className="space-y-1">
@@ -190,8 +182,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                     tooltip={item.title}
                     className={
                       isActive
-                        ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary hover:text-primary-foreground"
-                        : ""
+                        ? "w-full rounded-md bg-white font-semibold text-slate-900 hover:bg-white hover:text-slate-900"
+                        : "w-full rounded-md text-slate-700 hover:bg-white/70 hover:text-slate-900"
                     }
                   >
                     <Link href={item.url}>
@@ -204,8 +196,11 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             })}
           </SidebarMenu>
         </div>
+      </SidebarContent>
 
-        <SidebarSeparator className="my-2" />
+      {/* Footer - User profile pinned bottom */}
+      <SidebarFooter className="mt-auto bg-[#F1EFE8] px-3 py-3">
+        <SidebarSeparator className="my-2 bg-[#DBD7CA]" />
 
         {/* User Profile */}
         <SidebarMenu>
@@ -216,25 +211,23 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   size="lg"
                   className="
                     flex items-center w-full gap-3 px-3 py-3 rounded-lg
-                    hover:bg-accent transition-colors
-                    data-[state=open]:bg-accent
+                    hover:bg-white/70 transition-colors
+                    data-[state=open]:bg-white
                   "
                   aria-label="Account menu"
                 >
-                  <Avatar className="h-10 w-10 rounded-full shrink-0 ring-2 ring-background shadow-sm">
-                    <AvatarFallback className="rounded-full bg-gradient-to-br from-blue-500 to-blue-600 text-white text-sm font-semibold">
-                      {isLoading ? "..." : user ? getInitials(user.name) : "?"}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="truncate font-semibold text-sm text-foreground">
+                  <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border border-[#d0ccc4] bg-[#e8e4dd]">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="#666" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="8" cy="5.5" r="2.5" />
+                      <path d="M3 13c0-2.76 2.24-5 5-5s5 2.24 5 5" />
+                    </svg>
+                  </div>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-[13px] font-medium text-[#1a1a1a]">
                       {isLoading ? "Loading..." : user?.name || "Unknown"}
                     </span>
-                    <span className="truncate text-xs text-muted-foreground">
-                      {isLoading ? "" : user?.email || ""}
-                    </span>
                   </div>
-                  <ChevronsUpDown className="size-4 text-muted-foreground shrink-0" />
+                  <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground opacity-35" />
                 </SidebarMenuButton>
               </DropdownMenuTrigger>
               <DropdownMenuContent

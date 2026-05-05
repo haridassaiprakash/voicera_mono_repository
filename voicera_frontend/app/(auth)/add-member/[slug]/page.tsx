@@ -38,15 +38,15 @@ export default function AddMemberPage({ params }: PageProps) {
       // orgId is typically 6 characters, uuid is 36 characters (with dashes)
       // We need to split carefully since UUID contains dashes
       const parts = slug.split("-")
-      
+
       if (parts.length >= 6) {
         // First part is orgId (6 chars), rest is UUID
         const extractedOrgId = parts[0]
         const extractedUuid = parts.slice(1).join("-")
-        
+
         setOrgId(extractedOrgId)
         setInviteUuid(extractedUuid)
-        
+
         console.log("Parsed invite link:", {
           org_id: extractedOrgId,
           uuid: extractedUuid,
@@ -66,10 +66,10 @@ export default function AddMemberPage({ params }: PageProps) {
   // Check if email already exists when user finishes typing
   const handleEmailBlur = async () => {
     if (!formData.email || !formData.email.includes("@")) return
-    
+
     setIsCheckingEmail(true)
     setEmailError("")
-    
+
     try {
       const existingUser = await checkUserExists(formData.email)
       if (existingUser) {
@@ -117,7 +117,7 @@ export default function AddMemberPage({ params }: PageProps) {
 
     try {
       await joinOrganization(payload)
-      
+
       // Redirect to login on success
       router.push("/?joined=true")
     } catch (err) {
@@ -135,14 +135,19 @@ export default function AddMemberPage({ params }: PageProps) {
           <div>
             {/* Animated logo section */}
             <motion.div
-              className="mb-8 bg-white rounded-lg p-2 inline-block"
+              className="-ml-1 mb-8 block"
               initial={{ opacity: 0, y: -35 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ type: "spring", stiffness: 60, damping: 15, delay: 0.1 }}
             >
-              <img src="/ekstep.svg" alt="Ekstep" className="h-14 w-16" />
+              <img
+                src="/voicera-logo-black-source.png"
+                alt="VoiceRA"
+                className="h-[92px] w-auto max-w-[340px]"
+                style={{ filter: "brightness(0) invert(1)" }}
+              />
             </motion.div>
-            
+
             <div className="max-w-lg">
               <motion.h1
                 className="text-5xl font-bold text-white mb-6 leading-tight"
@@ -160,7 +165,7 @@ export default function AddMemberPage({ params }: PageProps) {
               >
                 You&apos;ve been invited to collaborate on India's open Voice AI infrastructure
               </motion.p>
-              
+
               <motion.div
                 className="space-y-6"
                 initial="hidden"
@@ -190,7 +195,7 @@ export default function AddMemberPage({ params }: PageProps) {
                     <p className="text-white/70">Multilingual, inclusive, voice-first</p>
                   </div>
                 </motion.div>
-                
+
                 <motion.div
                   className="flex items-start gap-3"
                   variants={{
@@ -206,7 +211,7 @@ export default function AddMemberPage({ params }: PageProps) {
                     <p className="text-white/70">Modular, DPI-aligned voice stack</p>
                   </div>
                 </motion.div>
-                
+
                 <motion.div
                   className="flex items-start gap-3"
                   variants={{
@@ -225,15 +230,13 @@ export default function AddMemberPage({ params }: PageProps) {
               </motion.div>
             </div>
           </div>
-          
+
           <motion.div
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ type: "spring", stiffness: 60, damping: 16, delay: 0.67 }}
           >
             <div className="flex items-center gap-4 text-white/60 text-sm mb-2">
-              <span>Digital India BHASHINI Division © 2026</span>
-              <span>·</span>
               <Link href="#" className="hover:text-white transition-colors">Privacy</Link>
               <span>·</span>
               <Link href="#" className="hover:text-white transition-colors">Terms</Link>
@@ -253,20 +256,12 @@ export default function AddMemberPage({ params }: PageProps) {
         >
           {/* Mobile Logo */}
           <div className="lg:hidden flex items-center gap-3 mb-8 justify-center">
-            <div className="h-10 w-10 rounded-lg bg-slate-900 flex items-center justify-center">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                className="w-6 h-6 text-white"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" x2="12" y1="19" y2="22" />
-              </svg>
-            </div>
-            <span className="text-xl font-semibold text-slate-900">EkStep</span>
+            <img
+              src="/voicera-logo-black-source.png"
+              alt="VoiceRA"
+              className="h-10 w-auto max-w-[180px]"
+              style={{ filter: "brightness(0) saturate(100%)" }}
+            />
           </div>
 
           <div className="mb-8">
@@ -327,9 +322,8 @@ export default function AddMemberPage({ params }: PageProps) {
                     setEmailError("") // Clear error when user starts typing
                   }}
                   onBlur={handleEmailBlur}
-                  className={`h-12 pl-11 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-200 ${
-                    emailError ? "border-red-300 focus:border-red-400 focus:ring-red-200" : ""
-                  }`}
+                  className={`h-12 pl-11 bg-white border-slate-200 text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:ring-1 focus:ring-slate-200 ${emailError ? "border-red-300 focus:border-red-400 focus:ring-red-200" : ""
+                    }`}
                   required
                 />
                 {isCheckingEmail && (
@@ -381,15 +375,14 @@ export default function AddMemberPage({ params }: PageProps) {
                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                 </button>
               </div>
-              
+
               {/* Password requirements */}
               <div className="flex flex-wrap gap-3 mt-3">
                 {passwordRequirements.map((req, i) => (
                   <div
                     key={i}
-                    className={`flex items-center gap-1.5 text-xs ${
-                      req.met ? "text-emerald-600" : "text-slate-500"
-                    }`}
+                    className={`flex items-center gap-1.5 text-xs ${req.met ? "text-emerald-600" : "text-slate-500"
+                      }`}
                   >
                     <Check className={`h-3.5 w-3.5 ${req.met ? "opacity-100" : "opacity-40"}`} />
                     {req.text}
